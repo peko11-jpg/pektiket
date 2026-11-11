@@ -7,6 +7,7 @@ import app.models  # noqa: F401  (da se tabele registruju)
 from app.config import settings
 from app.db import Base, get_db
 from app.main import app as fastapi_app
+settings.rate_limit_enabled = False
 
 # ista baza kao dev, samo sa imenom pektiket_test
 TEST_DB_URL = settings.database_url.rsplit("/", 1)[0] + "/pektiket_test"

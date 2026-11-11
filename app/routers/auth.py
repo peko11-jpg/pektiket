@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
+from app.core.rate_limit import hit, rate_limit
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db import get_db
 from app.models.user import User
@@ -12,13 +13,16 @@ from app.schemas.user import UserCreate, UserOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-
+# lažni hash: da provjera traje isto i kad email ne postoji
 DUMMY_HASH = hash_password("dummy-password-123")
 
-router = APIRouter(prefix="/auth", tags=["auth"])
 
-
-@router.post("/register", response_model=UserOut, status_code=201)
+@router.post(
+    "/register",
+    response_model=UserOut,
+    status_code=201,
+    dependencies=[Depends(rate_limit("register", 5, 3600))],
+)
 def register(data: UserCreate, db: Session = Depends(get_db)):
     email = data.email.lower()
 
@@ -36,8 +40,15 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
     db.refresh(user)
     return user
 
-@router.post("/login", response_model=TokenOut)
+
+@router.post(
+    "/login",
+    response_model=TokenOut,
+    dependencies=[Depends(rate_limit("login", 10, 60))],
+)
 def login(data: LoginRequest, db: Session = Depends(get_db)):
+    hit(f"rl:login-email:{data.email.lower()}", 5, 300)
+
     user = db.scalar(select(User).where(User.email == data.email.lower()))
 
     if user is None:
