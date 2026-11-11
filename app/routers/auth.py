@@ -4,10 +4,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
-from app.core.security import hash_password
+from app.core.security import create_access_token, hash_password, verify_password
 from app.db import get_db
 from app.models.user import User
+from app.schemas.auth import LoginRequest, TokenOut
 from app.schemas.user import UserCreate, UserOut
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+DUMMY_HASH = hash_password("dummy-password-123")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -29,3 +35,19 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
 
     db.refresh(user)
     return user
+
+@router.post("/login", response_model=TokenOut)
+def login(data: LoginRequest, db: Session = Depends(get_db)):
+    user = db.scalar(select(User).where(User.email == data.email.lower()))
+
+    if user is None:
+        verify_password(data.password, DUMMY_HASH)
+        raise AppError(401, "INVALID_CREDENTIALS", "Pogrešan email ili lozinka")
+
+    if not verify_password(data.password, user.password_hash):
+        raise AppError(401, "INVALID_CREDENTIALS", "Pogrešan email ili lozinka")
+
+    if not user.is_active:
+        raise AppError(403, "ACCOUNT_DISABLED", "Nalog je deaktiviran")
+
+    return TokenOut(access_token=create_access_token(str(user.id)))
