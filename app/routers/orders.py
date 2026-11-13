@@ -12,6 +12,8 @@ from app.models.order import Order
 from app.models.user import User
 from app.schemas.order import OrderCreate, OrderOut
 from app.services.orders import cancel_order, release_expired, reserve_tickets
+from app.schemas.payment import PaymentOut
+from app.services.payments import create_payment
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
@@ -65,3 +67,22 @@ def cancel(
     user: User = Depends(get_current_user),
 ):
     return cancel_order(db, order_id, user.id)
+
+@router.post(
+    "/{order_id}/pay",
+    response_model=PaymentOut,
+    dependencies=[Depends(rate_limit("pay", 10, 60))],
+)
+def pay(
+    order_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    payment, client_secret = create_payment(db, user.id, order_id)
+    return PaymentOut(
+        order_id=payment.order_id,
+        payment_intent_id=payment.stripe_payment_intent_id,
+        client_secret=client_secret,
+        amount_cents=payment.amount_cents,
+        currency=payment.currency,
+    )
