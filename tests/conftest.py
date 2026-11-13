@@ -44,3 +44,7 @@ def client():
     with TestClient(fastapi_app) as c:
         yield c
     fastapi_app.dependency_overrides.clear()
+
+@pytest.fixture
+def session_factory():
+    return TestingSession
