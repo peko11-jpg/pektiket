@@ -8,7 +8,8 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""    
     access_token_expire_minutes: int = 30
-
+    cors_origins: str = "http://localhost:5173"
+    environment: str = "development"
     model_config = SettingsConfigDict(env_file=".env")
     rate_limit_enabled: bool = True    
 

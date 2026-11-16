@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: pektiket
+          POSTGRES_PASSWORD: pektiket_dev_pass
+          POSTGRES_DB: pektiket
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pektiket"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+psycopg://pektiket:pektiket_dev_pass@localhost:5432/pektiket
+      REDIS_URL: redis://localhost:6379/0
+      SECRET_KEY: ci-only-secret-key-0123456789abcdef0123456789abcdef
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check that migrations apply on an empty database
+        run: alembic upgrade head
+
+      - name: Create test database
+        run: |
+          python - <<'EOF'
+          import psycopg
+          with psycopg.connect(
+              "postgresql://pektiket:pektiket_dev_pass@localhost:5432/pektiket",
+              autocommit=True,
+          ) as conn:
+              conn.execute("CREATE DATABASE pektiket_test")
+          EOF
+
+      - name: Run tests
+        run: python -m pytest -q
